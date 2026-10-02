@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="h-full bg-slate-900">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unificador de PDFs | Processamento local e seguro</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- pdf-lib via CDN, com fallback automático -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"
+            onerror="this.onerror=null;var s=document.createElement('script');s.src='https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js';document.head.appendChild(s);"></script>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <script>
+        tailwind.config = {
+            theme: { extend: { colors: {
+                brand: { 500: '#8b5cf6', 600: '#7c3aed', 700: '#6d28d9' },
+                slate: { 100: '#ffffff', 200: '#ede9fe', 300: '#d4c8fb', 400: '#b8abe6', 500: '#9a8bd0', 600: '#5d4a9e', 700: '#43317f', 800: '#2c1e63', 900: '#1a1040' },
+                emerald: { 300: '#93c5fd', 400: '#60a5fa', 500: '#3b82f6', 600: '#2563eb', 800: '#1e40af', 950: '#172554' }
+            } } }
+        }
+    </script>
+    <style>
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #6d5bb5; border-radius: 9999px; }
+        button:focus-visible, a:focus-visible { outline: 2px solid #c4b5fd; outline-offset: 2px; }
+        #drop-zone:focus-within { border-color: #8b5cf6; }
+            html { background: #1a1040; }
+        body { background: linear-gradient(160deg, #1a1040 0%, #2b1a68 55%, #1d2f78 100%) fixed; }
+    </style>
+</head>
+<body class="min-h-full text-slate-100 flex flex-col font-sans antialiased">
+
+    <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50">
+        <div class="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <div class="p-2 bg-brand-600 rounded-lg text-white shadow-lg shadow-brand-500/30">
+                    <i class="fa-solid fa-file-pdf text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg leading-tight">Unificador de PDFs</h1>
+                    <p class="text-xs text-sky-300">Processamento 100% no navegador</p>
+                </div>
+            </div>
+            <div class="hidden sm:flex items-center gap-2 text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/50 px-3 py-1.5 rounded-full">
+                <i class="fa-solid fa-shield-halved"></i>
+                <span>Seus arquivos não saem do computador</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 max-w-5xl w-full mx-auto px-4 py-8 flex flex-col gap-6">
+
+        <div class="text-center max-w-2xl mx-auto">
+            <h2 class="text-2xl md:text-3xl font-extrabold text-white mb-2">Junte vários PDFs em um só arquivo</h2>
+            <p class="text-slate-400 text-sm md:text-base">
+                Adicione até 1.000 arquivos de uma vez, ajuste a ordem e baixe o resultado.
+                Tudo é processado na memória do seu dispositivo, sem envio para nenhum servidor.
+            </p>
+        </div>
+
+        <div id="drop-zone" class="border-2 border-dashed border-slate-700 hover:border-brand-500 transition-colors duration-200 bg-slate-800/40 hover:bg-slate-800/80 rounded-2xl p-8 text-center cursor-pointer flex flex-col items-center justify-center relative group">
+            <input type="file" id="file-input" multiple accept=".pdf,application/pdf" aria-label="Selecionar arquivos PDF" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+            <div class="w-16 h-16 bg-slate-800 group-hover:bg-brand-600/20 text-brand-500 rounded-full flex items-center justify-center mb-4 transition-colors">
+                <i class="fa-solid fa-cloud-arrow-up text-2xl"></i>
+            </div>
+            <h3 class="text-lg font-semibold mb-1">Arraste seus PDFs aqui ou <span class="text-sky-300 underline">clique para selecionar</span></h3>
+            <p class="text-xs text-sky-300">Até 1.000 arquivos por vez, apenas .pdf</p>
+        </div>
+
+        <div id="notice" class="hidden bg-amber-950/30 border border-amber-800/50 rounded-xl p-4 text-sm text-amber-200" role="alert"></div>
+
+        <div id="controls-panel" class="hidden bg-slate-800/60 border border-slate-700/60 rounded-xl p-5 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-4 w-full md:w-auto">
+                <div class="p-3 bg-slate-700/50 rounded-lg text-slate-300">
+                    <i class="fa-solid fa-copy text-xl"></i>
+                </div>
+                <div>
+                    <p id="stats-count" class="font-bold text-white">0 arquivos</p>
+                    <p id="stats-size" class="text-xs text-sky-300">Tamanho total: 0 KB</p>
+                </div>
+            </div>
+            <div class="flex flex-wrap items-center gap-3 w-full md:w-auto justify-end">
+                <button id="sort-btn" class="px-3 py-2 text-xs font-semibold text-slate-300 hover:text-white disabled:opacity-40 transition-colors flex items-center gap-1.5">
+                    <i class="fa-solid fa-arrow-down-a-z"></i> Ordenar por nome
+                </button>
+                <button id="clear-btn" class="px-3 py-2 text-xs font-semibold text-slate-400 hover:text-rose-400 disabled:opacity-40 transition-colors flex items-center gap-1.5">
+                    <i class="fa-solid fa-trash-can"></i> Limpar tudo
+                </button>
+                <button id="merge-btn" class="w-full md:w-auto px-6 py-2.5 bg-gradient-to-r from-violet-600 to-blue-600 hover:from-violet-500 hover:to-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg shadow-lg shadow-brand-600/30 transition-all flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-object-group"></i>
+                    <span>Unificar e baixar</span>
+                </button>
+            </div>
+        </div>
+
+        <div id="progress-container" class="hidden bg-slate-800/80 border border-slate-700 rounded-xl p-5 space-y-3" aria-live="polite">
+            <div class="flex justify-between items-center text-xs gap-3">
+                <span id="progress-status" class="font-medium text-slate-300 truncate">Processando...</span>
+                <span id="progress-percent" class="font-bold text-sky-300">0%</span>
+            </div>
+            <div class="w-full bg-slate-700 rounded-full h-3 overflow-hidden">
+                <div id="progress-bar" class="bg-gradient-to-r from-violet-500 to-sky-400 h-full w-0 transition-all duration-150 rounded-full"></div>
+            </div>
+        </div>
+
+        <div id="download-panel" class="hidden bg-emerald-950/30 border border-emerald-800/50 rounded-xl p-6 text-center space-y-4">
+            <div class="w-12 h-12 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto">
+                <i class="fa-solid fa-circle-check text-2xl"></i>
+            </div>
+            <div>
+                <h3 class="text-lg font-bold text-emerald-300">PDF unificado com sucesso</h3>
+                <p id="download-summary" class="text-xs text-slate-400 mt-1"></p>
+            </div>
+            <button id="download-btn" class="px-8 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg shadow-lg shadow-emerald-600/30 transition-all inline-flex items-center gap-2">
+                <i class="fa-solid fa-download"></i>
+                <span>Baixar novamente</span>
+            </button>
+        </div>
+
+        <div id="file-list-container" class="hidden bg-slate-800/40 border border-slate-700/50 rounded-xl p-4">
+            <h4 class="text-xs font-semibold text-slate-400 mb-3 flex items-center justify-between gap-2">
+                <span>Arquivos na fila</span>
+                <span class="text-[11px] text-slate-500">O PDF final segue esta ordem</span>
+            </h4>
+            <div id="file-list" class="overflow-y-auto max-h-[320px] space-y-2 pr-1 custom-scrollbar"></div>
+        </div>
+    </main>
+
+    <footer class="border-t border-slate-800 py-4 text-center text-xs text-slate-500">
+        <p>Funciona offline após carregar a página • Hospedável no GitHub Pages</p>
+    </footer>
+
+    <script>
+        // --- Estado ---
+        let selectedFiles = [];
+        let mergedPdfBytes = null;
+        let isProcessing = false;
+        const MAX_FILES = 1000;
+
+        // --- DOM ---
+        const $ = (id) => document.getElementById(id);
+        const dropZone = $('drop-zone'), fileInput = $('file-input');
+        const controlsPanel = $('controls-panel'), statsCount = $('stats-count'), statsSize = $('stats-size');
+        const clearBtn = $('clear-btn'), mergeBtn = $('merge-btn'), sortBtn = $('sort-btn');
+        const fileListContainer = $('file-list-container'), fileList = $('file-list');
+        const progressContainer = $('progress-container'), progressBar = $('progress-bar');
+        const progressStatus = $('progress-status'), progressPercent = $('progress-percent');
+        const downloadPanel = $('download-panel'), downloadBtn = $('download-btn'), downloadSummary = $('download-summary');
+        const notice = $('notice');
+
+        const isPdf = (f) => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf');
+        const byName = (a, b) => a.name.localeCompare(b.name, 'pt-BR', { numeric: true, sensitivity: 'base' });
+
+        // --- Drag & drop ---
+        ['dragenter', 'dragover'].forEach(ev => dropZone.addEventListener(ev, (e) => {
+            e.preventDefault();
+            dropZone.classList.add('border-brand-500', 'bg-slate-800/80');
+        }));
+        ['dragleave', 'drop'].forEach(ev => dropZone.addEventListener(ev, (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('border-brand-500', 'bg-slate-800/80');
+        }));
+        dropZone.addEventListener('drop', (e) => addFiles(Array.from(e.dataTransfer.files)));
+        fileInput.addEventListener('change', (e) => {
+            addFiles(Array.from(e.target.files));
+            fileInput.value = ''; // permite selecionar o mesmo arquivo de novo
+        });
+
+        // Evita que soltar um arquivo fora da área abra o PDF no navegador
+        ['dragover', 'drop'].forEach(ev => window.addEventListener(ev, (e) => e.preventDefault()));
+
+        clearBtn.addEventListener('click', resetApp);
+        sortBtn.addEventListener('click', () => { selectedFiles.sort(byName); updateUI(); });
+        mergeBtn.addEventListener('click', startMergeProcess);
+        downloadBtn.addEventListener('click', downloadMergedPdf);
+
+        // Delegação de eventos da lista (remover / mover)
+        fileList.addEventListener('click', (e) => {
+            const btn = e.target.closest('button[data-action]');
+            if (!btn || isProcessing) return;
+            const i = Number(btn.dataset.index);
+            const action = btn.dataset.action;
+            if (action === 'remove') selectedFiles.splice(i, 1);
+            if (action === 'up' && i > 0) [selectedFiles[i - 1], selectedFiles[i]] = [selectedFiles[i], selectedFiles[i - 1]];
+            if (action === 'down' && i < selectedFiles.length - 1) [selectedFiles[i + 1], selectedFiles[i]] = [selectedFiles[i], selectedFiles[i + 1]];
+            invalidateResult();
+            updateUI();
+        });
+
+        // --- Funções de arquivos ---
+        function addFiles(files) {
+            if (isProcessing) return;
+            const pdfs = files.filter(isPdf);
+            const ignored = files.length - pdfs.length;
+
+            // Remove duplicatas (mesmo nome, tamanho e data)
+            const key = (f) => `${f.name}|${f.size}|${f.lastModified}`;
+            const existing = new Set(selectedFiles.map(key));
+            const fresh = pdfs.filter(f => !existing.has(key(f)));
+            const duplicates = pdfs.length - fresh.length;
+
+            fresh.sort(byName);
+            const room = Math.max(0, MAX_FILES - selectedFiles.length);
+            const accepted = fresh.slice(0, room);
+            const overflow = fresh.length - accepted.length;
+            selectedFiles = [...selectedFiles, ...accepted];
+
+            const msgs = [];
+            if (ignored) msgs.push(`${ignored} arquivo(s) que não são PDF foram ignorados.`);
+            if (duplicates) msgs.push(`${duplicates} arquivo(s) duplicado(s) foram ignorados.`);
+            if (overflow) msgs.push(`O limite é de ${MAX_FILES.toLocaleString('pt-BR')} arquivos por vez. ${overflow} arquivo(s) não foram adicionados.`);
+            showNotice(msgs);
+
+            invalidateResult();
+            updateUI();
+        }
+
+        function invalidateResult() {
+            mergedPdfBytes = null;
+            downloadPanel.classList.add('hidden');
+        }
+
+        function resetApp() {
+            if (isProcessing) return;
+            selectedFiles = [];
+            invalidateResult();
+            showNotice([]);
+            progressContainer.classList.add('hidden');
+            updateUI();
+        }
+
+        function showNotice(messages) {
+            notice.innerHTML = '';
+            if (!messages.length) { notice.classList.add('hidden'); return; }
+            messages.forEach(m => {
+                const p = document.createElement('p');
+                p.textContent = m;
+                notice.appendChild(p);
+            });
+            notice.classList.remove('hidden');
+        }
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024, sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.min(Math.floor(Math.log(bytes) / Math.log(k)), sizes.length - 1);
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)).toLocaleString('pt-BR') + ' ' + sizes[i];
+        }
+
+        function updateUI() {
+            const has = selectedFiles.length > 0;
+            controlsPanel.classList.toggle('hidden', !has);
+            fileListContainer.classList.toggle('hidden', !has);
+            if (!has) return;
+
+            const total = selectedFiles.reduce((acc, f) => acc + f.size, 0);
+            statsCount.textContent = `${selectedFiles.length} ${selectedFiles.length === 1 ? 'arquivo' : 'arquivos'} (máx. ${MAX_FILES.toLocaleString('pt-BR')})`;
+            statsSize.textContent = `Tamanho total: ${formatBytes(total)}`;
+
+            const frag = document.createDocumentFragment();
+            selectedFiles.forEach((file, idx) => {
+                const row = document.createElement('div');
+                row.className = 'flex items-center justify-between gap-2 p-2.5 bg-slate-900/60 rounded-lg text-xs border border-slate-700/40';
+
+                const left = document.createElement('div');
+                left.className = 'flex items-center gap-3 overflow-hidden';
+                left.innerHTML = `
+                    <span class="font-mono text-slate-500 text-[10px] w-8 text-right flex-shrink-0">${idx + 1}</span>
+                    <i class="fa-solid fa-file-pdf text-rose-400 text-sm flex-shrink-0"></i>`;
+                const name = document.createElement('span');
+                name.className = 'truncate font-medium text-slate-200';
+                name.textContent = file.name; // textContent evita injeção de HTML via nome do arquivo
+                name.title = file.name;
+                left.appendChild(name);
+
+                const right = document.createElement('div');
+                right.className = 'flex items-center gap-1 flex-shrink-0';
+                const size = document.createElement('span');
+                size.className = 'text-sky-300 text-[11px] mr-2 hidden sm:inline';
+                size.textContent = formatBytes(file.size);
+                right.appendChild(size);
+                right.insertAdjacentHTML('beforeend', `
+                    <button data-action="up" data-index="${idx}" class="text-slate-500 hover:text-white p-1.5 disabled:opacity-30" title="Mover para cima" aria-label="Mover para cima" ${idx === 0 ? 'disabled' : ''}><i class="fa-solid fa-chevron-up"></i></button>
+                    <button data-action="down" data-index="${idx}" class="text-slate-500 hover:text-white p-1.5 disabled:opacity-30" title="Mover para baixo" aria-label="Mover para baixo" ${idx === selectedFiles.length - 1 ? 'disabled' : ''}><i class="fa-solid fa-chevron-down"></i></button>
+                    <button data-action="remove" data-index="${idx}" class="text-slate-500 hover:text-rose-400 p-1.5" title="Remover" aria-label="Remover arquivo"><i class="fa-solid fa-xmark"></i></button>`);
+
+                row.append(left, right);
+                frag.appendChild(row);
+            });
+            fileList.replaceChildren(frag);
+        }
+
+        // --- Merge ---
+        function setBusy(busy) {
+            isProcessing = busy;
+            [mergeBtn, clearBtn, sortBtn].forEach(b => b.disabled = busy);
+            fileInput.disabled = busy;
+        }
+
+        function updateProgress(percent, text) {
+            progressBar.style.width = `${percent}%`;
+            progressPercent.textContent = `${percent}%`;
+            progressStatus.textContent = text;
+        }
+
+        const nextFrame = () => new Promise(r => setTimeout(r, 0)); // devolve o controle à interface
+
+        async function startMergeProcess() {
+            if (isProcessing || selectedFiles.length === 0) return;
+
+            if (typeof PDFLib === 'undefined') {
+                showNotice(['A biblioteca pdf-lib não carregou. Verifique sua conexão com a internet e recarregue a página.']);
+                return;
+            }
+
+            setBusy(true);
+            showNotice([]);
+            invalidateResult();
+            progressContainer.classList.remove('hidden');
+            updateProgress(0, 'Preparando documento...');
+
+            const failed = [];
+            let mergedCount = 0;
+
+            try {
+                const { PDFDocument } = PDFLib;
+                const mergedPdf = await PDFDocument.create();
+                const files = [...selectedFiles];
+                const total = files.length;
+
+                for (let i = 0; i < total; i++) {
+                    const file = files[i];
+                    updateProgress(Math.round((i / total) * 90), `Processando arquivo ${i + 1} de ${total}: ${file.name}`);
+                    await nextFrame();
+
+                    try {
+                        const buffer = await file.arrayBuffer();
+                        const doc = await PDFDocument.load(buffer); // PDFs protegidos por senha geram erro e são ignorados
+                        const pages = await mergedPdf.copyPages(doc, doc.getPageIndices());
+                        pages.forEach(p => mergedPdf.addPage(p));
+                        mergedCount++;
+                    } catch (err) {
+                        console.error(`Erro no arquivo ${file.name}:`, err);
+                        failed.push(file.name);
+                    }
+                }
+
+                if (mergedCount === 0) throw new Error('Nenhum PDF válido para unificar.');
+
+                updateProgress(92, 'Gerando o PDF final...');
+                await nextFrame();
+                mergedPdfBytes = await mergedPdf.save();
+
+                updateProgress(100, 'Concluído!');
+                await new Promise(r => setTimeout(r, 300));
+                progressContainer.classList.add('hidden');
+
+                downloadSummary.textContent =
+                    `${mergedCount} de ${total} arquivo(s) unificado(s) • ${mergedPdf.getPageCount()} páginas • ${formatBytes(mergedPdfBytes.length)}`;
+                downloadPanel.classList.remove('hidden');
+
+                if (failed.length) {
+                    showNotice([
+                        `${failed.length} arquivo(s) foram ignorados por estarem corrompidos ou protegidos por senha:`,
+                        ...failed.map(n => `• ${n}`)
+                    ]);
+                }
+
+                downloadMergedPdf(); // download automático
+            } catch (err) {
+                console.error('Erro ao unificar PDFs:', err);
+                progressContainer.classList.add('hidden');
+                const msgs = ['Não foi possível unificar os arquivos. Confira se os PDFs são válidos e tente novamente.'];
+                if (failed.length) msgs.push(...failed.map(n => `• Ignorado: ${n}`));
+                showNotice(msgs);
+            } finally {
+                setBusy(false);
+            }
+        }
+
+        function downloadMergedPdf() {
+            if (!mergedPdfBytes) return;
+            const blob = new Blob([mergedPdfBytes], { type: 'application/pdf' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'pdf_unificado.pdf';
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 10000);
+        }
+    </script>
+</body>
+</html>
